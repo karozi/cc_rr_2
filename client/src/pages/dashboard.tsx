@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, SystemStatus, Post } from "@/lib/api";
 import { wsClient } from "@/lib/websocket";
 import { useToast } from "@/hooks/use-toast";
 import MonitoringControls from "@/components/monitoring-controls";
@@ -15,64 +15,91 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
 
   // Queries
-  const { data: systemStatus } = useQuery({
+  const { data: systemStatus } = useQuery<SystemStatus>({
     queryKey: ['/api/status'],
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
-  const { data: postsData, isLoading: postsLoading } = useQuery({
+  const { data: postsData, isLoading: postsLoading } = useQuery<{posts: Post[], total: number, hasMore: boolean}>({
     queryKey: ['/api/posts'],
     refetchInterval: 10000, // Refetch every 10 seconds
   });
 
   // WebSocket connection
   useEffect(() => {
+    let isMounted = true;
+
     const handleConnection = (data: { status: string }) => {
-      setWebsocketStatus(data.status as any);
-      if (data.status === 'connected') {
-        toast({
-          title: "Connected",
-          description: "Real-time updates are now active",
-        });
-      } else if (data.status === 'disconnected') {
-        toast({
-          title: "Disconnected",
-          description: "Real-time updates are unavailable",
-          variant: "destructive",
-        });
+      if (!isMounted) return;
+      try {
+        setWebsocketStatus(data.status as any);
+        if (data.status === 'connected') {
+          toast({
+            title: "Connected",
+            description: "Real-time updates are now active",
+          });
+        } else if (data.status === 'disconnected') {
+          toast({
+            title: "Disconnected",
+            description: "Real-time updates are unavailable",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.warn('Error handling WebSocket connection status:', error);
       }
     };
 
     const handleNewPost = (post: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/status'] });
-      toast({
-        title: "New Post Found",
-        description: `Found a new post in ${post.subreddit}`,
-      });
+      if (!isMounted) return;
+      try {
+        queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/status'] });
+        toast({
+          title: "New Post Found",
+          description: `Found a new post in ${post.subreddit}`,
+        });
+      } catch (error) {
+        console.warn('Error handling new post:', error);
+      }
     };
 
     const handleScanComplete = (data: { totalPosts: number; newPosts: number }) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/status'] });
-      if (data.newPosts > 0) {
-        queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
+      if (!isMounted) return;
+      try {
+        queryClient.invalidateQueries({ queryKey: ['/api/status'] });
+        if (data.newPosts > 0) {
+          queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
+        }
+      } catch (error) {
+        console.warn('Error handling scan complete:', error);
       }
     };
 
     const handleMonitoringStarted = () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/status'] });
-      toast({
-        title: "Monitoring Started",
-        description: "Reddit monitoring is now active",
-      });
+      if (!isMounted) return;
+      try {
+        queryClient.invalidateQueries({ queryKey: ['/api/status'] });
+        toast({
+          title: "Monitoring Started",
+          description: "Reddit monitoring is now active",
+        });
+      } catch (error) {
+        console.warn('Error handling monitoring started:', error);
+      }
     };
 
     const handleMonitoringStopped = () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/status'] });
-      toast({
-        title: "Monitoring Stopped",
-        description: "Reddit monitoring has been stopped",
-      });
+      if (!isMounted) return;
+      try {
+        queryClient.invalidateQueries({ queryKey: ['/api/status'] });
+        toast({
+          title: "Monitoring Stopped",
+          description: "Reddit monitoring has been stopped",
+        });
+      } catch (error) {
+        console.warn('Error handling monitoring stopped:', error);
+      }
     };
 
     wsClient.on('connection', handleConnection);
@@ -81,15 +108,25 @@ export default function Dashboard() {
     wsClient.on('monitoringStarted', handleMonitoringStarted);
     wsClient.on('monitoringStopped', handleMonitoringStopped);
 
-    // Set initial status
-    setWebsocketStatus(wsClient.getConnectionStatus());
+    // Set initial status safely
+    try {
+      setWebsocketStatus(wsClient.getConnectionStatus());
+    } catch (error) {
+      console.warn('Error setting initial WebSocket status:', error);
+      setWebsocketStatus('disconnected');
+    }
 
     return () => {
-      wsClient.off('connection', handleConnection);
-      wsClient.off('newPost', handleNewPost);
-      wsClient.off('scanComplete', handleScanComplete);
-      wsClient.off('monitoringStarted', handleMonitoringStarted);
-      wsClient.off('monitoringStopped', handleMonitoringStopped);
+      isMounted = false;
+      try {
+        wsClient.off('connection', handleConnection);
+        wsClient.off('newPost', handleNewPost);
+        wsClient.off('scanComplete', handleScanComplete);
+        wsClient.off('monitoringStarted', handleMonitoringStarted);
+        wsClient.off('monitoringStopped', handleMonitoringStopped);
+      } catch (error) {
+        console.warn('Error cleaning up WebSocket listeners:', error);
+      }
     };
   }, [toast, queryClient]);
 
