@@ -6,7 +6,7 @@ export interface WebSocketMessage {
 export class WebSocketClient {
   private ws: WebSocket | null = null;
   private listeners: Map<string, Array<(data: any) => void>> = new Map();
-  private reconnectInterval: NodeJS.Timeout | null = null;
+  private reconnectInterval: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000;
   private maxReconnectDelay = 30000;
   private isDestroyed = false;
