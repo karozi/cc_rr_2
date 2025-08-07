@@ -89,6 +89,22 @@ export const api = {
     return res.json();
   },
 
+  // Configuration
+  getConfig: async () => {
+    const res = await apiRequest('GET', '/api/config');
+    return res.json();
+  },
+
+  saveConfig: async (config: { openaiKey: string; redditClientId: string; redditClientSecret: string; redditRefreshToken?: string }) => {
+    const res = await apiRequest('POST', '/api/config', config);
+    return res.json();
+  },
+
+  testConfig: async (config: { openaiKey: string; redditClientId: string; redditClientSecret: string }) => {
+    const res = await apiRequest('POST', '/api/config/test', config);
+    return res.json();
+  },
+
   // Knowledge base
   getKnowledge: async () => {
     const res = await apiRequest('GET', '/api/knowledge');

@@ -137,6 +137,31 @@ export default function MonitoringControls({ monitoring, onRefreshPosts }: Monit
             <i className="fas fa-sync-alt mr-2"></i>
             Refresh Posts
           </Button>
+          <Button 
+            onClick={() => {
+              fetch('/api/sample-data', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                  toast({
+                    title: "Sample Data Created",
+                    description: data.message || 'Sample posts added successfully',
+                  });
+                  onRefreshPosts();
+                })
+                .catch(error => {
+                  toast({
+                    title: "Failed to Create Sample Data",
+                    description: error.message,
+                    variant: "destructive",
+                  });
+                });
+            }}
+            variant="outline"
+            className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+          >
+            <i className="fas fa-vial mr-2"></i>
+            Add Sample Posts
+          </Button>
         </div>
 
         {monitoring?.isActive && (

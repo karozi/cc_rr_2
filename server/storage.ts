@@ -19,18 +19,47 @@ export interface IStorage {
   
   getKnowledgeBase(): Promise<KnowledgeBase[]>;
   createKnowledgeBase(knowledge: InsertKnowledgeBase): Promise<KnowledgeBase>;
+  updateKnowledgeBase(id: string, updates: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined>;
+  deleteKnowledgeBase(id: string): Promise<boolean>;
+  
+  getPrompt(): Promise<string | undefined>;
+  savePrompt(prompt: string): Promise<string>;
+  resetPromptToDefault(): Promise<string>;
 }
+
+const DEFAULT_PROMPT = `You are an expert Reddit user who provides helpful, engaging responses. 
+
+Post details:
+- Subreddit: {subreddit}
+- Title: {title}
+- Content: {content}{knowledgeContext}
+
+Generate a helpful reply that:
+1. Directly addresses the question or concern
+2. Provides actionable advice or insights
+3. Is conversational and authentic to Reddit culture
+4. Includes specific examples or recommendations when relevant
+5. Is concise but comprehensive
+
+Respond with JSON in this format:
+{
+  "reply": "Your helpful Reddit reply here",
+  "confidence": 0.85,
+  "reasoning": "Brief explanation of why this reply is appropriate"
+}`;
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private posts: Map<string, Post>;
   private monitoringConfig: MonitoringConfig | undefined;
   private knowledgeBase: Map<string, KnowledgeBase>;
+  private customPrompt: string | undefined;
 
   constructor() {
     this.users = new Map();
     this.posts = new Map();
     this.knowledgeBase = new Map();
+    this.customPrompt = undefined;
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -143,6 +172,33 @@ export class MemStorage implements IStorage {
     };
     this.knowledgeBase.set(id, knowledge);
     return knowledge;
+  }
+
+  async updateKnowledgeBase(id: string, updates: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined> {
+    const knowledge = this.knowledgeBase.get(id);
+    if (!knowledge) return undefined;
+    
+    const updatedKnowledge = { ...knowledge, ...updates };
+    this.knowledgeBase.set(id, updatedKnowledge);
+    return updatedKnowledge;
+  }
+
+  async deleteKnowledgeBase(id: string): Promise<boolean> {
+    return this.knowledgeBase.delete(id);
+  }
+
+  async getPrompt(): Promise<string | undefined> {
+    return this.customPrompt || DEFAULT_PROMPT;
+  }
+
+  async savePrompt(prompt: string): Promise<string> {
+    this.customPrompt = prompt;
+    return prompt;
+  }
+
+  async resetPromptToDefault(): Promise<string> {
+    this.customPrompt = undefined;
+    return DEFAULT_PROMPT;
   }
 }
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import KnowledgeBaseViewer from "./knowledge-base-viewer";
 
 interface SidebarProps {
   systemStatus?: SystemStatus;
@@ -14,6 +15,7 @@ interface SidebarProps {
 
 export default function Sidebar({ systemStatus, websocketStatus }: SidebarProps) {
   const [knowledgeText, setKnowledgeText] = useState('');
+  const [showKnowledgeViewer, setShowKnowledgeViewer] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -42,6 +44,7 @@ export default function Sidebar({ systemStatus, websocketStatus }: SidebarProps)
   };
 
   return (
+    <>
     <div className="space-y-6">
       {/* Status Card */}
       <Card>
@@ -91,10 +94,20 @@ export default function Sidebar({ systemStatus, websocketStatus }: SidebarProps)
       {/* Knowledge Base */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center">
-            <i className="fas fa-brain text-[hsl(var(--primary-500))] mr-2"></i>
-            Knowledge Base
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center">
+              <i className="fas fa-brain text-[hsl(var(--primary-500))] mr-2"></i>
+              Knowledge Base
+            </CardTitle>
+            <Button
+              onClick={() => setShowKnowledgeViewer(true)}
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+            >
+              <i className="fas fa-eye text-xs"></i>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-gray-600">
@@ -149,5 +162,10 @@ export default function Sidebar({ systemStatus, websocketStatus }: SidebarProps)
         </CardContent>
       </Card>
     </div>
-  );
+    
+    <KnowledgeBaseViewer 
+      isOpen={showKnowledgeViewer}
+      onClose={() => setShowKnowledgeViewer(false)}
+    />
+  </>;
 }

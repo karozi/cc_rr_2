@@ -51,6 +51,10 @@ export class RedditService {
           );
 
           if (matchedKeywords.length > 0) {
+            // Calculate urgency score based on multiple factors
+            const urgencyScore = this.calculateUrgencyScore(post, matchedKeywords, keywords);
+            const priority = this.determinePriority(urgencyScore);
+            
             posts.push({
               redditId: post.id,
               subreddit: `r/${subreddit}`,
@@ -62,13 +66,13 @@ export class RedditService {
               upvotes: post.ups,
               comments: post.num_comments,
               postUrl: `https://reddit.com${post.permalink}`,
-              matchReason: `Matches keywords: ${matchedKeywords.join(', ')}`,
+              matchReason: `Matches keywords: ${matchedKeywords.join(', ')} | Urgency: ${urgencyScore.toFixed(2)}`,
               tags: matchedKeywords,
-              priority: matchedKeywords.length > 2 ? 'high' : 'medium',
-              score: Math.min(1, matchedKeywords.length / keywords.length),
-              highlighted: matchedKeywords.length > 2,
+              priority: priority,
+              score: urgencyScore,
+              highlighted: priority === 'high' || priority === 'critical',
               posted: false,
-              confidence: 0.7 + (matchedKeywords.length * 0.1)
+              confidence: Math.min(0.95, 0.6 + (urgencyScore * 0.3))
             });
           }
         }
@@ -81,7 +85,55 @@ export class RedditService {
       }
     }
 
-    return posts.sort((a, b) => b.score - a.score);
+    return posts.sort((a, b) => {
+      // Sort by priority first, then by score
+      const priorityOrder = { 'critical': 4, 'high': 3, 'medium': 2, 'low': 1 };
+      const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] || 1;
+      const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] || 1;
+      
+      if (aPriority !== bPriority) {
+        return bPriority - aPriority;
+      }
+      return b.score - a.score;
+    });
+  }
+  
+  private calculateUrgencyScore(post: any, matchedKeywords: string[], allKeywords: string[]): number {
+    let score = 0;
+    
+    // 1. Keyword match ratio (0-0.3)
+    const keywordRatio = matchedKeywords.length / allKeywords.length;
+    score += keywordRatio * 0.3;
+    
+    // 2. Post engagement (0-0.25)
+    const engagementScore = Math.min(0.25, (post.ups + post.num_comments) / 100);
+    score += engagementScore;
+    
+    // 3. Post freshness (0-0.2)
+    const postAge = Date.now() - (post.created_utc * 1000);
+    const hoursOld = postAge / (1000 * 60 * 60);
+    const freshnessScore = Math.max(0, 0.2 - (hoursOld / 24) * 0.2); // Decrease over 24 hours
+    score += freshnessScore;
+    
+    // 4. Urgent keywords bonus (0-0.15)
+    const urgentKeywords = ['help', 'urgent', 'asap', 'problem', 'error', 'broken', 'issue', 'bug'];
+    const postText = `${post.title} ${post.selftext}`.toLowerCase();
+    const urgentMatches = urgentKeywords.filter(word => postText.includes(word));
+    score += Math.min(0.15, urgentMatches.length * 0.05);
+    
+    // 5. Question indicators bonus (0-0.1)
+    const questionIndicators = ['?', 'how', 'what', 'why', 'where', 'when', 'which', 'can someone'];
+    const questionMatches = questionIndicators.filter(indicator => postText.includes(indicator));
+    score += Math.min(0.1, questionMatches.length * 0.02);
+    
+    return Math.min(1, score);
+  }
+  
+  private determinePriority(urgencyScore: number): string {
+    if (urgencyScore >= 0.8) return 'critical';
+    if (urgencyScore >= 0.6) return 'high';
+    if (urgencyScore >= 0.4) return 'medium';
+    return 'low';
   }
 
   async postReply(postId: string, replyText: string) {

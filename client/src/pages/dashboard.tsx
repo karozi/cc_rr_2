@@ -7,10 +7,16 @@ import MonitoringControls from "@/components/monitoring-controls";
 import PostsFeed from "@/components/posts-feed";
 import Sidebar from "@/components/sidebar";
 import ConfigurationModal from "@/components/configuration-modal";
+import RepliesHistory from "@/components/replies-history";
+import PromptEditor from "@/components/prompt-editor";
 
 export default function Dashboard() {
   const [showConfig, setShowConfig] = useState(false);
+  const [showRepliesHistory, setShowRepliesHistory] = useState(false);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [websocketStatus, setWebsocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+  const [postsOffset, setPostsOffset] = useState(0);
+  const [allPosts, setAllPosts] = useState<Post[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -21,9 +27,40 @@ export default function Dashboard() {
   });
 
   const { data: postsData, isLoading: postsLoading } = useQuery<{posts: Post[], total: number, hasMore: boolean}>({
-    queryKey: ['/api/posts'],
-    refetchInterval: 10000, // Refetch every 10 seconds
+    queryKey: ['/api/posts', postsOffset],
+    queryFn: () => fetch(`/api/posts?limit=20&offset=${postsOffset}`).then(res => res.json()),
+    refetchInterval: postsOffset === 0 ? 10000 : false, // Only auto-refresh first page
   });
+  
+  const [loadingMore, setLoadingMore] = useState(false);
+  
+  // Merge posts when loading more pages
+  useEffect(() => {
+    if (postsData?.posts) {
+      if (postsOffset === 0) {
+        setAllPosts(postsData.posts);
+      } else {
+        setAllPosts(prev => {
+          const newPosts = postsData.posts.filter(
+            newPost => !prev.some(existing => existing.id === newPost.id)
+          );
+          return [...prev, ...newPosts];
+        });
+      }
+    }
+  }, [postsData, postsOffset]);
+  
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    setPostsOffset(prev => prev + 20);
+    setTimeout(() => setLoadingMore(false), 1000);
+  };
+  
+  const handleRefreshPosts = () => {
+    setPostsOffset(0);
+    setAllPosts([]);
+    queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
+  };
 
   // WebSocket connection
   useEffect(() => {
@@ -32,7 +69,7 @@ export default function Dashboard() {
     const handleConnection = (data: { status: string }) => {
       if (!isMounted) return;
       try {
-        setWebsocketStatus(data.status as any);
+        setWebsocketStatus(data.status as 'connected' | 'disconnected' | 'connecting');
         if (data.status === 'connected') {
           toast({
             title: "Connected",
@@ -154,6 +191,20 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <button
+                onClick={() => setShowRepliesHistory(true)}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Replies History"
+              >
+                <i className="fas fa-history text-lg"></i>
+              </button>
+              <button
+                onClick={() => setShowPromptEditor(true)}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Edit AI Prompt"
+              >
+                <i className="fas fa-magic text-lg"></i>
+              </button>
+              <button
                 onClick={() => setShowConfig(!showConfig)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Settings"
@@ -178,12 +229,15 @@ export default function Dashboard() {
           <div className="lg:col-span-3 space-y-6">
             <MonitoringControls 
               monitoring={systemStatus?.monitoring}
-              onRefreshPosts={() => queryClient.invalidateQueries({ queryKey: ['/api/posts'] })}
+              onRefreshPosts={handleRefreshPosts}
             />
             <PostsFeed 
-              posts={postsData?.posts || []}
+              posts={allPosts}
               total={postsData?.total || 0}
-              isLoading={postsLoading}
+              isLoading={postsLoading && postsOffset === 0}
+              hasMore={postsData?.hasMore}
+              onLoadMore={handleLoadMore}
+              loadingMore={loadingMore}
             />
           </div>
 
@@ -196,9 +250,22 @@ export default function Dashboard() {
       </div>
 
       {/* Configuration Modal */}
-      {showConfig && (
-        <ConfigurationModal onClose={() => setShowConfig(false)} />
-      )}
+      <ConfigurationModal 
+        isOpen={showConfig}
+        onClose={() => setShowConfig(false)} 
+      />
+      
+      {/* Replies History Modal */}
+      <RepliesHistory 
+        isOpen={showRepliesHistory}
+        onClose={() => setShowRepliesHistory(false)}
+      />
+      
+      {/* Prompt Editor Modal */}
+      <PromptEditor
+        isOpen={showPromptEditor}
+        onClose={() => setShowPromptEditor(false)}
+      />
     </div>
   );
 }

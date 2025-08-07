@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { storage } from '../storage';
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const apiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
@@ -30,26 +31,15 @@ export async function generateRedditReply(
       ? `\n\nRelevant knowledge base content:\n${knowledgeBase.join('\n\n')}`
       : '';
 
-    const prompt = `You are an expert Reddit user who provides helpful, engaging responses. 
-
-Post details:
-- Subreddit: ${subreddit}
-- Title: ${postTitle}
-- Content: ${postContent}${knowledgeContext}
-
-Generate a helpful reply that:
-1. Directly addresses the question or concern
-2. Provides actionable advice or insights
-3. Is conversational and authentic to Reddit culture
-4. Includes specific examples or recommendations when relevant
-5. Is concise but comprehensive
-
-Respond with JSON in this format:
-{
-  "reply": "Your helpful Reddit reply here",
-  "confidence": 0.85,
-  "reasoning": "Brief explanation of why this reply is appropriate"
-}`;
+    // Get custom prompt template
+    const promptTemplate = await storage.getPrompt();
+    
+    // Replace variables in the prompt template
+    const prompt = promptTemplate
+      .replace('{subreddit}', subreddit)
+      .replace('{title}', postTitle)
+      .replace('{content}', postContent)
+      .replace('{knowledgeContext}', knowledgeContext);
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",

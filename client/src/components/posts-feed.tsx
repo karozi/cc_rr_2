@@ -6,14 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import PostConfirmationDialog from "./post-confirmation-dialog";
 
 interface PostsFeedProps {
   posts: Post[];
   total: number;
   isLoading: boolean;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  loadingMore?: boolean;
 }
 
-export default function PostsFeed({ posts, total, isLoading }: PostsFeedProps) {
+export default function PostsFeed({ posts, total, isLoading, hasMore, onLoadMore, loadingMore }: PostsFeedProps) {
   const [filter, setFilter] = useState('all');
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -43,20 +47,54 @@ export default function PostsFeed({ posts, total, isLoading }: PostsFeedProps) {
     },
   });
 
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editedReply, setEditedReply] = useState('');
+  const [confirmationPost, setConfirmationPost] = useState<Post | null>(null);
+  const [confirmationReply, setConfirmationReply] = useState('');
+
   const handlePostAction = (post: Post, action: 'post' | 'edit' | 'skip') => {
     if (action === 'post') {
-      postReplyMutation.mutate({ id: post.id });
+      // Show confirmation dialog
+      const replyText = editingPost?.id === post.id ? editedReply : post.proposedReply || '';
+      setConfirmationPost(post);
+      setConfirmationReply(replyText);
     } else if (action === 'skip') {
-      // Just mark as skipped locally for now
-      console.log(`Skipped post ${post.id}`);
+      updatePostMutation.mutate({ 
+        id: post.id, 
+        updates: { highlighted: false } 
+      });
+      toast({
+        title: "Post Skipped",
+        description: "This post has been marked as skipped",
+      });
     } else if (action === 'edit') {
-      // TODO: Implement edit modal
-      console.log(`Edit post ${post.id}`);
+      setEditingPost(post);
+      setEditedReply(post.proposedReply || '');
+    }
+  };
+  
+  const handleConfirmPost = () => {
+    if (!confirmationPost) return;
+    
+    postReplyMutation.mutate({ 
+      id: confirmationPost.id, 
+      reply: confirmationReply !== confirmationPost.proposedReply ? confirmationReply : undefined 
+    });
+    
+    // Reset states
+    setConfirmationPost(null);
+    setConfirmationReply('');
+    if (editingPost?.id === confirmationPost.id) {
+      setEditingPost(null);
+      setEditedReply('');
     }
   };
 
   const filteredPosts = posts.filter(post => {
-    if (filter === 'high') return post.priority === 'high';
+    if (filter === 'critical') return post.priority === 'critical';
+    if (filter === 'high') return post.priority === 'high' || post.priority === 'critical';
+    if (filter === 'medium') return post.priority === 'medium';
+    if (filter === 'low') return post.priority === 'low';
     if (filter === 'unresponded') return !post.posted;
     return true;
   });
@@ -75,6 +113,7 @@ export default function PostsFeed({ posts, total, isLoading }: PostsFeedProps) {
   }
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -89,7 +128,10 @@ export default function PostsFeed({ posts, total, isLoading }: PostsFeedProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Posts</SelectItem>
+                <SelectItem value="critical">Critical Priority</SelectItem>
                 <SelectItem value="high">High Priority</SelectItem>
+                <SelectItem value="medium">Medium Priority</SelectItem>
+                <SelectItem value="low">Low Priority</SelectItem>
                 <SelectItem value="unresponded">Unresponded</SelectItem>
               </SelectContent>
             </Select>
@@ -103,14 +145,15 @@ export default function PostsFeed({ posts, total, isLoading }: PostsFeedProps) {
             <p>No posts found. Start monitoring to see results!</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
-            {filteredPosts.map((post) => (
-              <div
-                key={post.id}
-                className={`p-6 hover:bg-gray-50 transition-colors ${
-                  post.highlighted ? 'bg-[hsl(var(--primary-50))] border-l-4 border-l-[hsl(var(--primary-500))]' : ''
-                }`}
-              >
+          <>
+            <div className="divide-y divide-gray-200">
+              {filteredPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className={`p-6 hover:bg-gray-50 transition-colors ${
+                    post.highlighted ? 'bg-[hsl(var(--primary-50))] border-l-4 border-l-[hsl(var(--primary-500))]' : ''
+                  }`}
+                >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
                     <span className="text-sm font-medium text-[hsl(var(--primary-600))]">{post.subreddit}</span>
@@ -124,10 +167,16 @@ export default function PostsFeed({ posts, total, isLoading }: PostsFeedProps) {
                   <div className="flex items-center space-x-2">
                     <Badge
                       variant={
+                        post.priority === 'critical' ? 'destructive' :
                         post.priority === 'high' ? 'destructive' :
                         post.priority === 'medium' ? 'default' : 'secondary'
                       }
+                      className={
+                        post.priority === 'critical' ? 'bg-red-600 text-white animate-pulse' :
+                        post.priority === 'high' ? 'bg-orange-500 text-white' : ''
+                      }
                     >
+                      {post.priority === 'critical' && <i className="fas fa-exclamation-triangle mr-1"></i>}
                       {post.priority} priority
                     </Badge>
                     <div className="text-sm text-gray-500">
@@ -165,35 +214,68 @@ export default function PostsFeed({ posts, total, isLoading }: PostsFeedProps) {
                         AI-Generated Reply (Confidence: {(post.confidence * 100).toFixed(0)}%)
                       </span>
                     </div>
-                    <p className="text-sm text-gray-700 mb-3">{post.proposedReply}</p>
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        onClick={() => handlePostAction(post, 'post')}
-                        disabled={post.posted || postReplyMutation.isPending}
-                        size="sm"
-                        className={post.posted ? 'bg-[hsl(var(--success-500))] cursor-not-allowed' : 'bg-[hsl(var(--primary-500))] hover:bg-[hsl(var(--primary-600))]'}
-                      >
-                        {post.posted ? (
-                          <><i className="fas fa-check mr-1"></i>Posted</>
-                        ) : (
-                          <><i className="fas fa-paper-plane mr-1"></i>Post Reply</>
-                        )}
-                      </Button>
-                      <Button
-                        onClick={() => handlePostAction(post, 'edit')}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <i className="fas fa-edit mr-1"></i>Edit
-                      </Button>
-                      <Button
-                        onClick={() => handlePostAction(post, 'skip')}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <i className="fas fa-times mr-1"></i>Skip
-                      </Button>
-                    </div>
+                    {editingPost?.id === post.id ? (
+                      <>
+                        <textarea
+                          value={editedReply}
+                          onChange={(e) => setEditedReply(e.target.value)}
+                          className="w-full p-2 text-sm text-gray-700 border rounded-md mb-3 h-24 resize-none"
+                        />
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            onClick={() => handlePostAction(post, 'post')}
+                            disabled={postReplyMutation.isPending}
+                            size="sm"
+                            className="bg-[hsl(var(--primary-500))] hover:bg-[hsl(var(--primary-600))]"
+                          >
+                            <i className="fas fa-save mr-1"></i>Save & Post
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setEditingPost(null);
+                              setEditedReply('');
+                            }}
+                            variant="outline"
+                            size="sm"
+                          >
+                            <i className="fas fa-times mr-1"></i>Cancel
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-700 mb-3">{post.proposedReply}</p>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            onClick={() => handlePostAction(post, 'post')}
+                            disabled={post.posted || postReplyMutation.isPending}
+                            size="sm"
+                            className={post.posted ? 'bg-[hsl(var(--success-500))] cursor-not-allowed' : 'bg-[hsl(var(--primary-500))] hover:bg-[hsl(var(--primary-600))]'}
+                          >
+                            {post.posted ? (
+                              <><i className="fas fa-check mr-1"></i>Posted</>
+                            ) : (
+                              <><i className="fas fa-paper-plane mr-1"></i>Post Reply</>
+                            )}
+                          </Button>
+                          <Button
+                            onClick={() => handlePostAction(post, 'edit')}
+                            variant="outline"
+                            size="sm"
+                            disabled={post.posted}
+                          >
+                            <i className="fas fa-edit mr-1"></i>Edit
+                          </Button>
+                          <Button
+                            onClick={() => handlePostAction(post, 'skip')}
+                            variant="outline"
+                            size="sm"
+                          >
+                            <i className="fas fa-times mr-1"></i>Skip
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -204,11 +286,48 @@ export default function PostsFeed({ posts, total, isLoading }: PostsFeedProps) {
                     </Badge>
                   ))}
                 </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Load More Button */}
+            {hasMore && onLoadMore && (
+              <div className="p-6 border-t border-gray-200 text-center">
+                <Button
+                  onClick={onLoadMore}
+                  disabled={loadingMore}
+                  variant="outline"
+                  className="w-full"
+                >
+                  {loadingMore ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin mr-2"></i>
+                      Loading more posts...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-chevron-down mr-2"></i>
+                      Load More Posts ({total - posts.length} remaining)
+                    </>
+                  )}
+                </Button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
-  );
+    
+    <PostConfirmationDialog
+      isOpen={!!confirmationPost}
+      onClose={() => {
+        setConfirmationPost(null);
+        setConfirmationReply('');
+      }}
+      onConfirm={handleConfirmPost}
+      post={confirmationPost}
+      replyText={confirmationReply}
+      isPosting={postReplyMutation.isPending}
+    />
+  </>);
 }
