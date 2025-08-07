@@ -9,12 +9,10 @@ export class WebSocketClient {
   private reconnectDelay = 1000;
   private maxReconnectDelay = 30000;
   private isDestroyed = false;
-  private handleUnload: () => void;
 
   constructor() {
     // Add error handling for window unload events
     if (typeof window !== 'undefined') {
-      this.handleUnload = this.handleUnload.bind(this);
       window.addEventListener('beforeunload', this.handleUnload);
       window.addEventListener('unload', this.handleUnload);
     }

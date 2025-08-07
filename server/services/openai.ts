@@ -34,6 +34,10 @@ export async function generateRedditReply(
     // Get custom prompt template
     const promptTemplate = await storage.getPrompt();
     
+    if (!promptTemplate) {
+      throw new Error('No prompt template available');
+    }
+    
     // Replace variables in the prompt template
     const prompt = promptTemplate
       .replace('{subreddit}', subreddit)

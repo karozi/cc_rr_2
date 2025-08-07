@@ -133,7 +133,7 @@ export class MonitoringService {
         await storage.createOrUpdateMonitoringConfig({
           ...config,
           lastScanTime: new Date(),
-          totalPosts: config.totalPosts + posts.length,
+          totalPosts: (config.totalPosts || 0) + posts.length,
           newPosts: newPostsCount
         });
       }

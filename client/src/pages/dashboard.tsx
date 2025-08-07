@@ -66,16 +66,17 @@ export default function Dashboard() {
   useEffect(() => {
     let isMounted = true;
 
-    const handleConnection = (data: { status: string }) => {
+    const handleConnection = (data: unknown) => {
+      const connectionData = data as { status: string };
       if (!isMounted) return;
       try {
-        setWebsocketStatus(data.status as 'connected' | 'disconnected' | 'connecting');
-        if (data.status === 'connected') {
+        setWebsocketStatus(connectionData.status as 'connected' | 'disconnected' | 'connecting');
+        if (connectionData.status === 'connected') {
           toast({
             title: "Connected",
             description: "Real-time updates are now active",
           });
-        } else if (data.status === 'disconnected') {
+        } else if (connectionData.status === 'disconnected') {
           toast({
             title: "Disconnected",
             description: "Real-time updates are unavailable",
@@ -101,11 +102,12 @@ export default function Dashboard() {
       }
     };
 
-    const handleScanComplete = (data: { totalPosts: number; newPosts: number }) => {
+    const handleScanComplete = (data: unknown) => {
+      const scanData = data as { totalPosts: number; newPosts: number };
       if (!isMounted) return;
       try {
         queryClient.invalidateQueries({ queryKey: ['/api/status'] });
-        if (data.newPosts > 0) {
+        if (scanData.newPosts > 0) {
           queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
         }
       } catch (error) {

@@ -7,6 +7,12 @@ interface RedditConfig {
   userAgent: string;
 }
 
+interface PostReplyResult {
+  success: boolean;
+  commentId: string;
+  commentUrl: string;
+}
+
 export class RedditService {
   private reddit: Snoowrap | null = null;
 
@@ -136,19 +142,20 @@ export class RedditService {
     return 'low';
   }
 
-  async postReply(postId: string, replyText: string) {
+  async postReply(postId: string, replyText: string): Promise<PostReplyResult> {
     if (!this.reddit) {
       throw new Error('Reddit API not initialized. Please check your credentials.');
     }
 
     try {
-      const post = await this.reddit.getSubmission(postId);
-      const comment = await post.reply(replyText);
-      return {
+      const post = await (this.reddit as any).getSubmission(postId);
+      const comment = await (post as any).reply(replyText);
+      const result: PostReplyResult = {
         success: true,
         commentId: comment.id,
         commentUrl: `https://reddit.com${comment.permalink}`
       };
+      return result;
     } catch (error) {
       console.error('Error posting reply:', error);
       throw new Error('Failed to post reply: ' + (error as Error).message);

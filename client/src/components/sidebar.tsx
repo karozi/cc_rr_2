@@ -167,5 +167,6 @@ export default function Sidebar({ systemStatus, websocketStatus }: SidebarProps)
       isOpen={showKnowledgeViewer}
       onClose={() => setShowKnowledgeViewer(false)}
     />
-  </>;
+  </>
+  );
 }
