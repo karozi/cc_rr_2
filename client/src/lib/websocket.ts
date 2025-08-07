@@ -1,24 +1,29 @@
-export interface WebSocketMessage {
-  type: string;
-  data: any;
-}
+import type { WebSocketMessage } from '@shared/types';
+
+export type { WebSocketMessage };
 
 export class WebSocketClient {
   private ws: WebSocket | null = null;
-  private listeners: Map<string, Array<(data: any) => void>> = new Map();
+  private listeners: Map<string, Array<(data: unknown) => void>> = new Map();
   private reconnectInterval: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000;
   private maxReconnectDelay = 30000;
   private isDestroyed = false;
+  private handleUnload: () => void;
 
   constructor() {
     // Add error handling for window unload events
     if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', () => this.destroy());
-      window.addEventListener('unload', () => this.destroy());
+      this.handleUnload = this.handleUnload.bind(this);
+      window.addEventListener('beforeunload', this.handleUnload);
+      window.addEventListener('unload', this.handleUnload);
     }
     this.connect();
   }
+
+  private handleUnload = () => {
+    this.destroy();
+  };
 
   private connect() {
     // Don't reconnect if the client has been destroyed
@@ -87,18 +92,20 @@ export class WebSocketClient {
       if (this.isDestroyed) return;
       console.log('Attempting to reconnect WebSocket...');
       this.connect();
-      this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
     }, this.reconnectDelay);
+    
+    // Increase delay for next reconnect attempt
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
   }
 
-  on(type: string, callback: (data: any) => void) {
+  on(type: string, callback: (data: unknown) => void) {
     if (!this.listeners.has(type)) {
       this.listeners.set(type, []);
     }
     this.listeners.get(type)!.push(callback);
   }
 
-  off(type: string, callback: (data: any) => void) {
+  off(type: string, callback: (data: unknown) => void) {
     const listeners = this.listeners.get(type);
     if (listeners) {
       const index = listeners.indexOf(callback);
@@ -108,7 +115,7 @@ export class WebSocketClient {
     }
   }
 
-  private emit(type: string, data: any) {
+  private emit(type: string, data: unknown) {
     if (this.isDestroyed) return;
     const listeners = this.listeners.get(type);
     if (listeners) {
@@ -151,6 +158,12 @@ export class WebSocketClient {
     this.isDestroyed = true;
     this.disconnect();
     this.listeners.clear();
+    
+    // Remove event listeners
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', this.handleUnload);
+      window.removeEventListener('unload', this.handleUnload);
+    }
   }
 
   getConnectionStatus(): 'connected' | 'disconnected' | 'connecting' {

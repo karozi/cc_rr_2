@@ -9,7 +9,13 @@ export class MonitoringService {
 
   addWebSocketClient(ws: WebSocket) {
     this.webSocketClients.add(ws);
+    
     ws.on('close', () => {
+      this.webSocketClients.delete(ws);
+    });
+    
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
       this.webSocketClients.delete(ws);
     });
   }
@@ -34,8 +40,8 @@ export class MonitoringService {
       newPosts: 0
     });
 
-    // Stop existing monitoring
-    this.stopMonitoring();
+    // Stop existing monitoring and wait for cleanup
+    await this.stopMonitoring();
 
     // Start new monitoring interval
     this.monitoringInterval = setInterval(async () => {
@@ -87,9 +93,8 @@ export class MonitoringService {
       let newPostsCount = 0;
 
       for (const postData of posts) {
-        // Check if post already exists
-        const existingPosts = await storage.getPosts();
-        const exists = existingPosts.posts.some(p => p.redditId === postData.redditId);
+        // Check if post already exists by redditId
+        const exists = await storage.postExistsByRedditId(postData.redditId);
         
         if (!exists) {
           // Generate AI reply

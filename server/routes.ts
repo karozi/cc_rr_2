@@ -16,13 +16,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('WebSocket client connected');
     monitoringService.addWebSocketClient(ws);
     
-    // Send initial status
-    monitoringService.getStatus().then(status => {
-      ws.send(JSON.stringify({
-        type: 'monitoringStatus',
-        data: status
-      }));
-    });
+    // Send initial status after a small delay to ensure client is ready
+    setTimeout(async () => {
+      try {
+        const status = await monitoringService.getStatus();
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'monitoringStatus',
+            data: status
+          }));
+        }
+      } catch (error) {
+        console.error('Error sending initial status:', error);
+      }
+    }, 100);
   });
 
   // API Routes
@@ -41,15 +48,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to get status' });
+      res.status(500).json({ message: 'Failed to get status' });
     }
   });
 
   // Posts endpoints
   app.get('/api/posts', async (req, res) => {
     try {
-      const limit = parseInt(req.query.limit as string) || 20;
-      const offset = parseInt(req.query.offset as string) || 0;
+      const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 20));
+      const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
       
       const result = await storage.getPosts(limit, offset);
       res.json({
@@ -60,7 +67,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         offset
       });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch posts' });
+      res.status(500).json({ message: 'Failed to fetch posts' });
     }
   });
 
@@ -68,11 +75,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const post = await storage.getPost(req.params.id);
       if (!post) {
-        return res.status(404).json({ error: 'Post not found' });
+        return res.status(404).json({ message: 'Post not found' });
       }
       res.json(post);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch post' });
+      res.status(500).json({ message: 'Failed to fetch post' });
     }
   });
 
@@ -81,11 +88,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = req.body;
       const updatedPost = await storage.updatePost(req.params.id, updates);
       if (!updatedPost) {
-        return res.status(404).json({ error: 'Post not found' });
+        return res.status(404).json({ message: 'Post not found' });
       }
       res.json(updatedPost);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to update post' });
+      res.status(500).json({ message: 'Failed to update post' });
     }
   });
 
@@ -94,16 +101,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const post = await storage.getPost(req.params.id);
       if (!post) {
-        return res.status(404).json({ error: 'Post not found' });
+        return res.status(404).json({ message: 'Post not found' });
       }
 
       if (!redditService.isConfigured()) {
-        return res.status(400).json({ error: 'Reddit API not configured' });
+        return res.status(400).json({ message: 'Reddit API not configured' });
       }
 
       const replyText = req.body.reply || post.proposedReply;
       if (!replyText) {
-        return res.status(400).json({ error: 'No reply text provided' });
+        return res.status(400).json({ message: 'No reply text provided' });
       }
 
       const result = await redditService.postReply(post.redditId, replyText);
@@ -113,7 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(result);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to post reply: ' + (error as Error).message });
+      res.status(500).json({ message: 'Failed to post reply: ' + (error as Error).message });
     }
   });
 
@@ -123,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { subreddits, keywords, scanInterval = 5 } = req.body;
       
       if (!subreddits || !keywords) {
-        return res.status(400).json({ error: 'Subreddits and keywords are required' });
+        return res.status(400).json({ message: 'Subreddits and keywords are required' });
       }
 
       await monitoringService.startMonitoring(subreddits, keywords, scanInterval);
@@ -134,7 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         config: { subreddits, keywords, scanInterval }
       });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to start monitoring: ' + (error as Error).message });
+      res.status(500).json({ message: 'Failed to start monitoring: ' + (error as Error).message });
     }
   });
 
@@ -143,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await monitoringService.stopMonitoring();
       res.json({ success: true, message: 'Monitoring stopped' });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to stop monitoring' });
+      res.status(500).json({ message: 'Failed to stop monitoring' });
     }
   });
 
@@ -152,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const status = await monitoringService.getStatus();
       res.json(status);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to get monitoring status' });
+      res.status(500).json({ message: 'Failed to get monitoring status' });
     }
   });
 
@@ -162,7 +169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const knowledge = await storage.getKnowledgeBase();
       res.json(knowledge);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch knowledge base' });
+      res.status(500).json({ message: 'Failed to fetch knowledge base' });
     }
   });
 
@@ -172,7 +179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const knowledge = await storage.createKnowledgeBase(validatedData);
       res.json(knowledge);
     } catch (error) {
-      res.status(400).json({ error: 'Invalid knowledge base data' });
+      res.status(400).json({ message: 'Invalid knowledge base data' });
     }
   });
 

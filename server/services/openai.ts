@@ -1,9 +1,13 @@
 import OpenAI from "openai";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY || "sk-default-key"
-});
+const apiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+
+if (!apiKey || apiKey === 'sk-default-key') {
+  console.warn('OpenAI API key not configured. AI features will be disabled.');
+}
+
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 export interface AIResponse {
   reply: string;
@@ -17,6 +21,10 @@ export async function generateRedditReply(
   subreddit: string,
   knowledgeBase: string[] = []
 ): Promise<AIResponse> {
+  if (!openai) {
+    throw new Error('OpenAI API not configured. Please set OPENAI_API_KEY environment variable.');
+  }
+  
   try {
     const knowledgeContext = knowledgeBase.length > 0 
       ? `\n\nRelevant knowledge base content:\n${knowledgeBase.join('\n\n')}`
@@ -73,6 +81,11 @@ Respond with JSON in this format:
 }
 
 export async function analyzePosts(posts: any[]): Promise<any[]> {
+  if (!openai) {
+    console.warn('OpenAI API not configured. Returning posts without analysis.');
+    return posts;
+  }
+  
   try {
     const prompt = `Analyze these Reddit posts and score them for engagement potential.
 

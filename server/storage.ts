@@ -8,6 +8,8 @@ export interface IStorage {
   
   getPosts(limit?: number, offset?: number): Promise<{ posts: Post[], total: number }>;
   getPost(id: string): Promise<Post | undefined>;
+  getPostByRedditId(redditId: string): Promise<Post | undefined>;
+  postExistsByRedditId(redditId: string): Promise<boolean>;
   createPost(post: InsertPost): Promise<Post>;
   updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined>;
   deletePost(id: string): Promise<boolean>;
@@ -58,6 +60,18 @@ export class MemStorage implements IStorage {
 
   async getPost(id: string): Promise<Post | undefined> {
     return this.posts.get(id);
+  }
+
+  async getPostByRedditId(redditId: string): Promise<Post | undefined> {
+    return Array.from(this.posts.values()).find(
+      (post) => post.redditId === redditId
+    );
+  }
+
+  async postExistsByRedditId(redditId: string): Promise<boolean> {
+    return Array.from(this.posts.values()).some(
+      (post) => post.redditId === redditId
+    );
   }
 
   async createPost(insertPost: InsertPost): Promise<Post> {

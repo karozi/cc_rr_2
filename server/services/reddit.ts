@@ -56,7 +56,9 @@ export class RedditService {
               subreddit: `r/${subreddit}`,
               title: post.title,
               content: post.selftext || 'No content',
-              author: `u/${post.author.name}`,
+              author: post.author && typeof post.author === 'object' && 'name' in post.author 
+                ? `u/${post.author.name}` 
+                : `u/${post.author || 'unknown'}`,
               upvotes: post.ups,
               comments: post.num_comments,
               postUrl: `https://reddit.com${post.permalink}`,
@@ -72,6 +74,10 @@ export class RedditService {
         }
       } catch (error) {
         console.error(`Error fetching from r/${subreddit}:`, error);
+        // Return partial results but notify about the error
+        if (posts.length === 0) {
+          throw new Error(`Failed to fetch posts from r/${subreddit}: ${(error as Error).message}`);
+        }
       }
     }
 
