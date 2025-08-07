@@ -63,7 +63,16 @@ export class MemStorage implements IStorage {
   async createPost(insertPost: InsertPost): Promise<Post> {
     const id = randomUUID();
     const post: Post = { 
-      ...insertPost, 
+      ...insertPost,
+      priority: insertPost.priority ?? "medium",
+      upvotes: insertPost.upvotes ?? 0,
+      comments: insertPost.comments ?? 0,
+      tags: insertPost.tags ?? [],
+      score: insertPost.score ?? 0,
+      confidence: insertPost.confidence ?? 0,
+      posted: insertPost.posted ?? false,
+      highlighted: insertPost.highlighted ?? false,
+      proposedReply: insertPost.proposedReply ?? null,
       id, 
       createdAt: new Date() 
     };
@@ -92,6 +101,11 @@ export class MemStorage implements IStorage {
     const id = this.monitoringConfig?.id || randomUUID();
     this.monitoringConfig = {
       ...config,
+      scanInterval: config.scanInterval ?? 5,
+      isActive: config.isActive ?? false,
+      totalPosts: config.totalPosts ?? 0,
+      newPosts: config.newPosts ?? 0,
+      lastScanTime: config.lastScanTime ?? null,
       id,
       createdAt: this.monitoringConfig?.createdAt || new Date(),
     };
@@ -108,6 +122,8 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const knowledge: KnowledgeBase = {
       ...insertKnowledge,
+      tags: insertKnowledge.tags ?? [],
+      source: insertKnowledge.source ?? null,
       id,
       createdAt: new Date(),
     };
